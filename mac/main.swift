@@ -259,6 +259,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let res = Bundle.main.resourceURL!.appendingPathComponent("web")
         web.loadFileURL(res.appendingPathComponent("index.html"), allowingReadAccessTo: res)
         NSApp.activate(ignoringOtherApps: true)
+        scheduleSnapshotIfRequested()
+    }
+
+    // 문서용 스크린샷: `작은 빛.app/Contents/MacOS/GhostCore --snapshot <파일.png> [--delay 초] [--quit]`
+    func scheduleSnapshotIfRequested() {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return }
+        let out = URL(fileURLWithPath: args[i + 1])
+        var delay = 8.0
+        if let d = args.firstIndex(of: "--delay"), d + 1 < args.count, let v = Double(args[d + 1]) { delay = v }
+        let quit = args.contains("--quit")
+        window.setContentSize(NSSize(width: 1440, height: 900))
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            self.web.takeSnapshot(with: nil) { image, _ in
+                if let image = image, let tiff = image.tiffRepresentation,
+                   let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {
+                    try? png.write(to: out)
+                }
+                if quit { NSApp.terminate(nil) }
+            }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
