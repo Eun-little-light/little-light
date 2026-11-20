@@ -14,7 +14,7 @@
 - 눈빛: 듣는 중엔 숨 쉬듯, 말하는 중엔 어절마다 한 번씩 밝아지고 빛줄기가 지나감. 시선은 마우스를 부드럽게 따라가고, 멈추면 두리번거림
 
 ## 실행
-- `dist/작은 빛.app` 더블클릭 (처음 한 번은 우클릭 → 열기. 애드혹 서명이라 확인 창이 뜰 수 있음)
+- [Releases](https://github.com/Eun-little-light/little-light/releases)에서 `little-light-v*.zip`을 받아 풀거나, 직접 빌드한 `dist/작은 빛.app`을 더블클릭 (처음 한 번은 우클릭 → 열기. 애드혹 서명이라 확인 창이 뜰 수 있음)
 - 앱이 켜질 때 Ollama 서버가 꺼져 있으면 앱이 직접 켜고, 앱을 끄면 함께 끕니다.
 
 ## 로컬 LLM
@@ -62,4 +62,24 @@ lore.js            세계관 지식 베이스
 mac/main.swift     WKWebView 래퍼, Ollama HTTP/자동 실행, Mac 제어 도구, 메뉴
 mac/make_icon.swift 앱 아이콘 생성
 build.sh           .app 번들 빌드 + 애드혹 서명
+NOTICE.md          외부 프로젝트·참고 자료·상표 표기
 ```
+
+## 사용한 외부 프로젝트
+작은 빛은 아래 프로그램을 **설치된 그대로 불러 쓰기만** 하며, 코드나 바이너리를 이 저장소와 릴리즈에 포함하지 않습니다.
+포크하거나 수정한 프로젝트는 없습니다. 자세한 출처와 라이선스는 [NOTICE.md](NOTICE.md)를 보세요.
+
+- [agent-desktop](https://github.com/vercel-labs/agent-desktop) (Vercel Labs, Apache-2.0): 다른 앱 화면 읽기·조작
+- [Ollama](https://github.com/ollama/ollama) (MIT): 로컬 LLM 서버
+- [Qwen3](https://ollama.com/library/qwen3) (Apache-2.0): 기본 대화 모델
+- 세계관 요약: 나무위키 데스티니 관련 문서를 참고해 새로 서술 (CC BY-NC-SA 2.0 KR)
+
+Destiny(데스티니)와 관련 명칭은 Bungie, Inc.의 상표·저작물입니다. 작은 빛은 Bungie와 관련 없는 **비공식 팬 프로젝트**입니다.
+
+## 제작 방식과 주의 사항
+- 이 앱은 **Anthropic의 Claude(AI)의 도움을 받아** 설계하고 코드를 작성했습니다.
+- AI가 작성한 코드가 많아서, 충분히 검증되지 않은 **버그나 예상치 못한 동작**이 있을 수 있습니다.
+- 로컬 LLM(qwen3:8b)은 사실과 다른 대답을 하거나, 엉뚱한 도구를 고를 수 있습니다.
+- Mac 제어(볼륨, 다크 모드, 메모, 미리 알림, 다른 앱 클릭·입력)는 실제로 시스템을 바꿉니다. 중요한 동작은 확인 카드를 꼭 읽고 실행하세요.
+- 애드혹 서명 앱이라 Apple 공증을 거치지 않았습니다. 처음 실행할 때는 우클릭 → 열기를 하세요.
+- 문제를 발견하면 [Issues](https://github.com/Eun-little-light/little-light/issues)에 알려 주세요. 사용에 따른 책임은 사용자에게 있습니다.
