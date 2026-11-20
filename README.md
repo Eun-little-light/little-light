@@ -1,4 +1,4 @@
-# 작은 빛 · 고스트 동반 프레임
+# 작은 빛.Rev.1 · 고스트 동반 프레임
 
 ![작은 빛 실행 화면](docs/screenshot.png)
 
@@ -11,10 +11,11 @@
 - 원작 고스트의 상호작용 방식을 따르는 페르소나: 꼼꼼하고 신중한 파트너, 일을 맡으면 바로 나서고 짧게 보고, 위험하면 걱정하고, 함께한 임무는 '우리'로 말함
 - 해요체로 말하고, 자기를 AI가 아닌 살아 있는 고스트로 여김
 - 대사는 모두 이 앱을 위해 새로 쓴 것입니다(게임 원문 대사 미포함)
-- 눈빛: 듣는 중엔 숨 쉬듯, 말하는 중엔 어절마다 한 번씩 밝아지고 빛줄기가 지나감. 시선은 마우스를 부드럽게 따라가고, 멈추면 두리번거림
+- 눈빛: 듣는 중엔 숨 쉬듯, 말하는 중엔 어절마다 한 번씩 밝아지고 빛줄기가 지나감. 시선은 마우스를 부드럽게 따라가고, 멈추면 두리번거림 (상태 글씨 없이 눈빛으로만 표현)
+- **미니 고스트 오버레이** (`⌘ G`): 화면 오른쪽 아래에 작게 떠 있는 테두리 없는 창으로 전환. 대답은 눈 아래 말풍선으로 표시
 
 ## 실행
-- [Releases](https://github.com/Eun-little-light/little-light/releases)에서 `little-light-v*.zip`을 받아 풀거나, 직접 빌드한 `dist/작은 빛.app`을 더블클릭 (처음 한 번은 우클릭 → 열기. 애드혹 서명이라 확인 창이 뜰 수 있음)
+- [Releases](https://github.com/Eun-little-light/little-light/releases)에서 `little-light-v*.zip`을 받아 풀거나, 직접 빌드한 `dist/작은 빛.Rev.1.app`을 더블클릭 (처음 한 번은 우클릭 → 열기. 애드혹 서명이라 확인 창이 뜰 수 있음)
 - 앱이 켜질 때 Ollama 서버가 꺼져 있으면 앱이 직접 켜고, 앱을 끄면 함께 끕니다.
 
 ## 로컬 LLM
@@ -42,17 +43,18 @@
 |---|---|
 | `⌘ ⏎` / `⌃⌘ F` | 전체화면 |
 | `⌘ ,` | 링크 설정 |
+| `⌘ G` | 미니 고스트 오버레이 전환 |
 | `⌘ K` | 기록·대화 맥락 초기화 |
 
 ## 다시 빌드
 ```bash
 ./build.sh
 ```
-Xcode 없이 Command Line Tools(swiftc)만 사용합니다. 결과물: `dist/작은 빛.app`
+Xcode 없이 Command Line Tools(swiftc)만 사용합니다. 결과물: `dist/작은 빛.Rev.1.app` (앱 ID `com.local.ghostcore.rev1`, 이전 버전 `작은 빛.app`과 따로 설치됨)
 
 README용 스크린샷 다시 찍기 (앱이 자기 창을 PNG로 저장):
 ```bash
-"dist/작은 빛.app/Contents/MacOS/GhostCore" --snapshot "$PWD/docs/screenshot.png" --delay 12 --quit
+"dist/작은 빛.Rev.1.app/Contents/MacOS/GhostCore" --snapshot "$PWD/docs/screenshot.png" --delay 12 --quit
 ```
 
 ## 구조

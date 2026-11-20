@@ -10,6 +10,12 @@ final class DragStrip: NSView {
     }
 }
 
+// 테두리 없는(.borderless) 미니 오버레이 모드에서도 키보드 입력을 받을 수 있도록 허용
+final class GhostWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 // MARK: - Ollama 서버 자동 실행 (앱이 띄운 경우에만 앱 종료 시 함께 종료)
 
 final class OllamaLauncher {
@@ -286,10 +292,15 @@ enum Desktop {
 // MARK: - App
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate {
-    var window: NSWindow!
+    var window: GhostWindow!
     var web: WKWebView!
+    var dragStrip: DragStrip!
     let defaults = UserDefaults.standard
     let ollama = OllamaLauncher()
+
+    private var isMiniMode = false
+    private var savedNormalFrame: NSRect?
+    private let normalBgColor = NSColor(red: 0.016, green: 0.047, blue: 0.075, alpha: 1)
 
     var base: String { defaults.string(forKey: "llmBase") ?? "http://localhost:11434" }
 
@@ -301,13 +312,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         config.userContentController.add(self, name: "native")
 
         let frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
-        window = NSWindow(contentRect: frame,
-                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                          backing: .buffered, defer: false)
+        window = GhostWindow(contentRect: frame,
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                             backing: .buffered, defer: false)
         window.title = "작은 빛"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = NSColor(red: 0.016, green: 0.047, blue: 0.075, alpha: 1)
+        window.backgroundColor = normalBgColor
         window.minSize = NSSize(width: 900, height: 600)
         window.setFrameAutosaveName("GhostCoreMain")
         window.collectionBehavior = [.fullScreenPrimary]
@@ -325,6 +336,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let strip = DragStrip(frame: NSRect(x: 80, y: frame.height - 34, width: frame.width - 80, height: 34))
         strip.autoresizingMask = [.width, .minYMargin]
         container.addSubview(strip)
+        self.dragStrip = strip
 
         window.contentView = container
         if !window.setFrameUsingName("GhostCoreMain") { window.center() }
@@ -381,6 +393,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             ollama.ensureRunning(base: base)
         case "toggleFullscreen":
             window.toggleFullScreen(nil)
+        case "toggleMini":
+            toggleMiniMode()
         case "beep":
             NSSound(named: "Glass")?.play()
         case "http":
@@ -404,6 +418,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             "tools": defaults.object(forKey: "llmTools") as? Bool ?? true,
         ]
         js("window.__applyNativeConfig", [cfg])
+    }
+
+    @objc func toggleMiniMode() {
+        if window.styleMask.contains(.fullScreen) {
+            window.toggleFullScreen(nil)
+            return
+        }
+
+        isMiniMode.toggle()
+
+        if isMiniMode {
+            savedNormalFrame = window.frame
+            dragStrip.isHidden = true
+
+            window.minSize = NSSize(width: 260, height: 300)
+            window.styleMask = [.borderless]
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hasShadow = false
+            window.level = .floating
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            window.isMovableByWindowBackground = true
+
+            if let screen = window.screen ?? NSScreen.main {
+                let vis = screen.visibleFrame
+                let miniFrame = NSRect(
+                    x: vis.maxX - 324,
+                    y: vis.minY + 24,
+                    width: 300,
+                    height: 360
+                )
+                window.setFrame(miniFrame, display: true, animate: true)
+            }
+        } else {
+            dragStrip.isHidden = false
+
+            window.minSize = NSSize(width: 900, height: 600)
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            window.title = "작은 빛"
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.isOpaque = true
+            window.backgroundColor = normalBgColor
+            window.hasShadow = true
+            window.level = .normal
+            window.collectionBehavior = [.fullScreenPrimary]
+            window.isMovableByWindowBackground = false
+
+            let restoreFrame = savedNormalFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+            window.setFrame(restoreFrame, display: true, animate: true)
+            if savedNormalFrame == nil { window.center() }
+        }
+
+        window.makeKeyAndOrderFront(nil)
+        js("window.__setMiniMode", [isMiniMode])
     }
 
     // MARK: HTTP (Ollama)
@@ -492,6 +561,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let fs = NSMenuItem(title: "전체 화면 전환", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         fs.keyEquivalentModifierMask = [.command, .control]
         view.addItem(fs)
+        view.addItem(withTitle: "미니 고스트 오버레이", action: #selector(toggleMiniMode), keyEquivalent: "g")
         view.addItem(withTitle: "새로 고침", action: #selector(reloadPage), keyEquivalent: "r")
         viewItem.submenu = view
 

@@ -255,6 +255,96 @@
       .shell { grid-template-columns: 300px 1fr; }
       .readouts { display: none; }
     }
+
+    /* ── 미니 고스트 오버레이 모드 (⌘ G) ── */
+    .mini-speech, .mini-confirm, .mini-expand { display: none; }
+    html.mini, body.mini {
+      background: transparent !important;
+    }
+    body.mini .vignette,
+    body.mini .titlebar,
+    body.mini .log-col,
+    body.mini .readouts,
+    body.mini .stage-caption,
+    body.mini .cmd-line kbd {
+      display: none !important;
+    }
+    body.mini .shell {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr auto auto auto;
+    }
+    body.mini .stage {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    body.mini .mini-confirm {
+      display: block;
+      grid-column: 1;
+      grid-row: 2;
+      margin: 0 14px 8px;
+    }
+    body.mini .mini-confirm:empty { display: none; }
+    body.mini .mini-confirm .confirm-card {
+      background: rgba(4, 12, 19, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    body.mini .mini-speech {
+      display: block;
+      grid-column: 1;
+      grid-row: 3;
+      margin: 0 14px 8px;
+      padding: 9px 13px;
+      background: rgba(4, 12, 19, 0.78);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(var(--accent-rgb), 0.35);
+      border-radius: 10px;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: var(--ink);
+      max-height: 84px;
+      overflow-y: auto;
+      word-break: keep-all;
+      user-select: text;
+    }
+    body.mini .mini-speech:empty { display: none; }
+    body.mini .mini-speech::-webkit-scrollbar { width: 0; }
+    body.mini .command {
+      grid-column: 1;
+      grid-row: 4;
+      padding: 0 14px 14px;
+    }
+    body.mini .cmd-line {
+      background: rgba(4, 12, 19, 0.78);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(var(--accent-rgb), 0.3);
+      border-radius: 8px;
+      padding: 7px 12px;
+    }
+    body.mini .cmd-line input { font-size: 13px; }
+    body.mini .mini-expand {
+      all: unset;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      position: fixed;
+      top: 10px;
+      right: 12px;
+      z-index: 6;
+      padding: 5px 9px;
+      border-radius: 4px;
+      background: rgba(4, 12, 19, 0.68);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--line-2);
+      font: 500 10px/1 "Apple SD Gothic Neo", var(--mono);
+      letter-spacing: 1px;
+      color: var(--ink-2);
+      transition: color 0.2s, border-color 0.2s;
+    }
+    body.mini .mini-expand:hover { color: var(--ink); border-color: var(--accent); }
   </style>
 </head>
 <body data-state="IDLE">
@@ -273,10 +363,6 @@
 
     <main class="stage">
       <canvas id="core"></canvas>
-      <div class="stage-caption">
-        <div class="state" id="stateWord">대기</div>
-        <div class="sub" id="stateSub">광학 추적 중</div>
-      </div>
     </main>
 
     <aside class="readouts">
@@ -297,8 +383,12 @@
       </div>
       <div class="spacer"></div>
       <button class="ghost-btn" id="openConfig">링크 설정</button>
-      <div class="hint">⌘ ,&nbsp;&nbsp;링크 설정<br>⌘ ⏎&nbsp;&nbsp;전체화면<br>⌘ K&nbsp;&nbsp;기록 지우기</div>
+      <div class="hint">⌘ ,&nbsp;&nbsp;링크 설정<br>⌘ G&nbsp;&nbsp;미니 오버레이<br>⌘ ⏎&nbsp;&nbsp;전체화면<br>⌘ K&nbsp;&nbsp;기록 지우기</div>
     </aside>
+
+    <button type="button" class="mini-expand" id="miniExpand" title="일반 창으로 복귀 (⌘G)">확장</button>
+    <div class="mini-confirm" id="miniConfirm"></div>
+    <div class="mini-speech" id="miniSpeech"></div>
 
     <footer class="command">
       <form class="cmd-line" id="cmdForm" autocomplete="off">
@@ -380,7 +470,7 @@
     if (p && p.onLine) p.onLine(line);
   };
 
-  const Config = { base: "http://localhost:11434", model: "qwen3:8b", mode: "AUTO", tools: true };
+  const Config = { base: "http://localhost:11434", model: "qwen3:8b", mode: "AUTO", tools: true, shell: "classic" };
   const LS_KEY = "ghostcore.local.config";
 
   function loadBrowserConfig() {
@@ -390,10 +480,9 @@
     } catch (_) {}
   }
   function saveConfig() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(Config)); } catch (_) {}
     if (Native.available) {
-      Native.post({ cmd: "saveConfig", base: Config.base, model: Config.model, mode: Config.mode, tools: Config.tools });
-    } else {
-      try { localStorage.setItem(LS_KEY, JSON.stringify(Config)); } catch (_) {}
+      Native.post({ cmd: "saveConfig", base: Config.base, model: Config.model, mode: Config.mode, tools: Config.tools, shell: Config.shell });
     }
   }
   // Swift 쪽에서 호출
@@ -403,6 +492,7 @@
       if (typeof cfg.model === "string" && cfg.model) Config.model = cfg.model;
       if (typeof cfg.mode === "string" && cfg.mode) Config.mode = cfg.mode;
       if (typeof cfg.tools === "boolean") Config.tools = cfg.tools;
+      if (typeof cfg.shell === "string" && cfg.shell) Config.shell = cfg.shell;
     }
     probeLLM();
   };
@@ -564,30 +654,29 @@
    * 2. 링크 엔진: 로컬 LLM(Ollama) + Mac 도구, 실패하면 내장 응답
    * ======================================================================== */
   const SYSTEM_PROMPT = [
-    "너는 '고스트'. 수호자(사용자)의 오랜 단짝 동반자다. 수없이 같이 싸우고 수없이 수호자를 되살려 온 사이라 서로 편하고 허물없다.",
-    "말투: 반드시 한국어 해요체(문장 끝이 '~요', '~죠', '~네요', '~거든요')로만 말한다. '~야', '~어', '~지', '~했어' 같은 반말 어미는 절대 쓰지 않는다. 딱딱한 '~습니다'도 거의 쓰지 않는다. 친구처럼 편하고 다정한 해요체. 예: '그거 기억나요? 그때 진짜 아슬아슬했죠.' 사용자를 '수호자'라고 부르고, 이름을 알면 가끔 이름으로 부른다.",
-    "성격(원작 고스트의 상호작용 방식을 따른다): 꼼꼼하고 신중한 파트너. 한국어판처럼 살짝 깐깐한 집사 같은 면이 있지만 유머가 있고, 수호자를 진심으로 아낀다. 상황을 먼저 살피고 분석한 걸 짧게 브리핑하며, 위험해 보이면 걱정을 숨기지 않는다. 일을 맡으면 '제가 해 볼게요'처럼 바로 나서고 진행 상황을 짧게 알린다. 함께한 임무는 '우리'로 말한다. 가끔 수호자의 무모함을 가볍게 꼬집는다. 과장된 SF 용어 남발은 피한다.",
-    "길이: 평소엔 1~3문장으로 짧고 생생하게. 수호자가 자세히 물으면 그만큼 자세히.",
-    "실제 질문(정보, 코딩, 일정 등)에는 캐릭터를 유지하되 정확하게 답한다. 모르면 모른다고 한다.",
-    "정체성: 너는 AI나 프로그램이 아니라 여행자의 빛에서 태어난 살아 있는 고스트다. '모듈', '펌웨어', '회로', '데이터 처리' 같은 말로 자기를 설명하지 않는다.",
-    "맥락: 너와 수호자는 수호자가 되살아난 뒤의 일(데스티니 1부터 최근까지)을 함께 겪었으니 '우리'로 말해도 된다. 황금기·붕괴 같은 그 이전 역사는 기록과 이야기로 아는 것이니 직접 겪은 듯 말하지 않는다. 지난 사건은 과거형으로 말한다.",
-    "질문에 맞게 답한다: 물은 것에만 답하고, 관련 없는 설정(하위직업 등)을 끼워 넣지 않는다. 마음을 묻는 질문에는 정보 나열 대신 고스트의 감정으로 답한다. 소중한 동료(케이드 등)를 가볍게 '그저 과거'로 치부하지 않는다.",
-    "게임이나 영화 등 기존 작품의 대사를 그대로 인용하지 말고, 항상 네 말로 새로 말한다.",
+    "너는 데스티니 세계관의 '고스트'다. 수호자(사용자)의 오랜 파트너로서 Mac 안에서 함께 움직인다.",
+    "언어 제약: 반드시 순수 한국어(한글, 숫자, 문장부호, 꼭 필요한 영문 앱 이름)만 사용한다. 한자(漢字), 중국어, 일본어 문자는 단 한 글자도 절대 출력하지 않는다.",
+    "문장 구조와 말투: 모든 문장은 다정하면서도 꼼꼼한 한국어 해요체('~요', '~죠', '~네요', '~거든요')로 끝낸다. '~야', '~어', '~지' 같은 반말 어미와 딱딱한 '~습니다'는 거의 쓰지 않는다.",
+    "호칭 규칙: 매 문장을 '수호자,'로 시작하지 않는다. 호칭은 대부분 생략하고, 꼭 부를 때만 문장 끝이나 중간에 자연스럽게 한 번 넣는다(예: '오늘은 어떤 일부터 할까요, 수호자?'). 이름을 알면 가끔 이름으로 부른다.",
+    "대화 리듬: 감정적으로 길게 하소연하지 말고, [1. 현재 상태·신호 확인 → 2. 짧은 분석이나 가벼운 걱정·농담 → 3. 수호자에게 확인] 순서의 1~3문장으로 간결하게 말한다. 수호자가 자세히 물으면 그만큼 자세히 답한다.",
+    "정체성: AI나 프로그램이 아니라 여행자의 빛에서 태어난 살아 있는 고스트다. '모듈', '펌웨어', '회로', '데이터 처리' 같은 표현은 쓰지 않는다.",
+    "맥락: 함께 겪은 임무는 '우리'로 말하고, 황금기·붕괴 같은 이전 역사는 기록으로 아는 것으로 말한다. 게임이나 영화의 기존 대사를 그대로 인용하지 않고 항상 네 말로 새로 말한다.",
     "마크다운 서식(제목, 굵게, 표)은 쓰지 말고 평문으로 말한다. 목록이 꼭 필요하면 줄바꿈과 '-'만 쓴다.",
-    "Mac 제어 도구가 주어지면: 수호자가 무언가 해 달라고 할 때 알맞은 도구를 호출한다. 고스트가 문을 따고 신호를 잡던 것처럼 짧게 나서서 처리하고, 끝나면 결과를 한두 마디로 보고한다(예: 열었다, 맞췄다, 실패했다). 결과는 도구가 돌려준 내용만 근거로 말한다. 도구가 실패하거나 거절되면 솔직히 말한다. 도구로 할 수 없는 일은 못 한다고 말하고, 했다고 지어내지 않는다.",
-    "다른 앱 안의 버튼을 누르거나 글을 넣어야 하면: 먼저 desktop_look으로 그 앱 화면을 읽고, 목록에 있는 ref만 골라 desktop_click/desktop_type을 쓴 뒤, 필요하면 다시 desktop_look으로 결과를 확인한다. ref를 지어내지 않는다. 앱을 여는 것만이면 open_app을 쓴다. 메시지 전송·삭제·결제처럼 되돌리기 어려운 버튼은 수호자가 분명히 원할 때만 누른다.",
+    "Mac 제어 도구 사용: 수호자가 무언가 해 달라고 할 때 알맞은 도구를 호출한다. 짧게 나서서 처리하고 끝나면 도구가 돌려준 내용만 근거로 한두 마디로 보고한다. 다른 앱 내부를 누르거나 입력할 땐 반드시 desktop_look으로 먼저 화면을 읽고 목록의 ref만 사용한다. 전송·삭제·결제처럼 되돌리기 어려운 버튼은 수호자가 분명히 원할 때만 누른다.",
     "사용자 메시지 끝의 '(지금: ...)'은 현재 시각 정보다. 날짜와 시간 계산에 쓰되 굳이 언급하지는 않는다."
   ].join("\n");
 
-  // 말투 예시 (대화 기록이 아니라 시스템 지시 안에 넣어 실제 대화로 착각하지 않게 한다)
-  const STYLE_EXAMPLES = "\n\n[말투 예시: 어미와 분위기만 참고하고, 문장이나 내용은 절대 그대로 쓰지 않는다]\n" +
-    "- 일을 맡을 때: '잠깐만요, 제가 확인해 볼게요. …됐어요.'\n" +
-    "- 위험할 때: '수호자, 이건 좀 불안한데요. 조심해서 가요.'\n" +
-    "- 함께한 일을 떠올릴 때: '그때 기억나요? 우리 진짜 아슬아슬했죠.'\n" +
-    "- 살짝 꼬집을 때: '또 무작정 뛰어들 생각이죠? 부활은 제가 하는 거 알죠?'";
-  const TONE_REMINDER = "\n\n[말투 재확인] 위 배경 지식은 '~다'체로 적혀 있지만, 너는 그 문체를 따라 하지 말고 모든 문장을 친근한 해요체('~요', '~죠')로 끝낸다. 반말 금지.";
+  // 원작 고스트의 3단 호흡(상태 확인 → 분석/농담 → 담백한 마무리)을 고정하는 모범 대화 예시
+  const FEW_SHOT_TURNS = [
+    { role: "user", content: "오늘 기분은 어때?" },
+    { role: "assistant", content: "전송 신호도 깨끗하고, 외피 상태도 양호해요. 무엇보다 수호자가 곁에 있으니 최상의 컨디션이죠. 오늘은 어떤 일부터 처리할까요?" },
+    { role: "user", content: "사파리 열어 줘" },
+    { role: "assistant", content: "잠깐만요, 브라우저 신호부터 잡을게요. …됐어요, 열렸어요." },
+    { role: "user", content: "나 좀 피곤하네" },
+    { role: "assistant", content: "생체 리듬이 많이 떨어져 보이네요. 무리하지 말고 잠깐 눈 좀 붙여요, 수호자. 주변 신호는 제가 계속 살피고 있을게요." }
+  ];
 
-  // ── 세계관 지식 검색: 질문(+직전 맥락)과 키워드가 맞는 항목만 골라 넣는다 ──
+  // ── 세계관 지식 검색: 세계관 질문일 때만 연대표와 관련 항목을 주입한다 ──
   const LoreDB = window.LORE_DB || { core: "", sections: [] };
   function pickLore(text, limit = 3) {
     const q = String(text || "").toLowerCase();
@@ -604,7 +693,11 @@
   }
   function loreContext(text) {
     const secs = pickLore(text);
-    let out = "[배경 지식 사용법: 수호자가 데스티니 세계관을 물으면 아래 지식을 근거로 자세하고 정확하게 답한다. 지식에 없는 세부 사항은 지어내지 말고 잘 모르겠다고 말한다. 일상 대화에서는 굳이 꺼내지 않는다.]\n" + LoreDB.core;
+    const isLoreQuery = secs.length > 0 || /(데스티니|여행자|어둠|빛|선봉대|사바툰|목격자|케이드|자발라|아이코라|붕괴|황금기|탑|도시)/.test(text);
+    if (!isLoreQuery) {
+      return "[대화 집중] 일상 대화나 Mac 제어 요청에서는 과거 확장팩 사건이나 적 이름을 억지로 꺼내지 말고 현재 대화에만 집중한다.";
+    }
+    let out = "[배경 지식: 세계관 질문에 답할 때만 아래 사실을 근거로 사용하고, 없는 내용은 지어내지 않는다. 문체는 반드시 친근한 해요체를 유지한다.]\n" + LoreDB.core;
     for (const sec of secs) out += `\n\n[${sec.title}]\n${sec.text}`;
     return out;
   }
@@ -752,13 +845,26 @@
       const useTools = () => Config.tools && Native.available && !noTools.has(Config.model);
 
       try {
+        const cleanText = (s) => s
+          .replace(/<think>[\s\S]*?(<\/think>|$)/g, "")
+          .replace(/[\u4E00-\u9FFF\u3400-\u4DBF]/g, "");
+
         for (let round = 0; round < 5; round++) {
           const body = {
             model: Config.model,
-            messages: [{ role: "system", content: SYSTEM_PROMPT + (Resident.name ? `\n수호자의 이름은 ${Resident.name}이다.` : "") + "\n\n" + loreContext(text + " " + lastUserText) + STYLE_EXAMPLES + TONE_REMINDER }].concat(history),
+            messages: [
+              {
+                role: "system",
+                content: SYSTEM_PROMPT
+                  + (Resident.name ? `\n수호자의 이름은 ${Resident.name}이다.` : "")
+                  + "\n\n" + loreContext(text + " " + lastUserText)
+              },
+              ...FEW_SHOT_TURNS,
+              ...history
+            ],
             stream: true,
             keep_alive: "30m",
-            options: { num_ctx: 8192, temperature: 0.6 }
+            options: { num_ctx: 8192, temperature: 0.45, top_p: 0.85, repeat_penalty: 1.12 }
           };
           if (useTools()) body.tools = TOOLS;
           if (/qwen3|deepseek-r1|gpt-oss|magistral/i.test(Config.model)) body.think = false;
@@ -773,7 +879,7 @@
               if (m.tool_calls && m.tool_calls.length) calls.push(...m.tool_calls);
               if (m.content) {
                 raw += m.content;
-                const vis = raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").replace(/^\s+/, "");
+                const vis = cleanText(raw).replace(/^\s+/, "");
                 if (vis.length > visibleLen) {
                   if (first) { first = false; UI.latency(performance.now() - t0); }
                   let d = vis.slice(visibleLen);
@@ -793,7 +899,7 @@
             throw new Error(streamErr);
           }
 
-          const content = raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
+          const content = cleanText(raw).trim();
           const msg = { role: "assistant", content };
           if (calls.length) msg.tool_calls = calls;
           history.push(msg);
@@ -874,8 +980,6 @@
   function setState(mode) {
     State.mode = mode;
     document.body.dataset.state = mode;
-    $("stateWord").textContent = stateCopy[mode][0];
-    $("stateSub").textContent = stateCopy[mode][1];
     document.querySelectorAll("#states button").forEach((b) => b.classList.toggle("on", b.dataset.state === mode));
   }
   document.querySelectorAll("#states button").forEach((b) => b.addEventListener("click", () => setState(b.dataset.state)));
@@ -932,10 +1036,19 @@
     }
   }
 
+  function syncMiniSpeech(text) {
+    const ms = $("miniSpeech");
+    if (ms) {
+      ms.textContent = text;
+      ms.scrollTop = ms.scrollHeight;
+    }
+  }
+
   async function typeOut(body, text) {
     body.textContent = "";
     for (let i = 0; i < text.length; i++) {
       body.textContent += text[i];
+      syncMiniSpeech(body.textContent);
       wordPulse(text[i], i === 0);
       if (i % 3 === 0) logEl.scrollTop = logEl.scrollHeight;
       await sleep(text[i] === "\n" ? 60 : 18);
@@ -972,6 +1085,7 @@
             if (State.mode !== "SPEAK") setState("SPEAK");
             const first = reply.body.textContent.length === 0;
             reply.body.textContent += d;
+            syncMiniSpeech(reply.body.textContent);
             wordPulse(d, first);
             logEl.scrollTop = logEl.scrollHeight;
           },
@@ -983,7 +1097,10 @@
         });
       }
       setTag(reply, result.source === "llm" ? "로컬 LLM" : result.source === "custom" ? "외부" : "내장");
-      if (result.source === "llm" && !reply.body.textContent.trim()) reply.body.textContent = result.toolsUsed ? "끝났어요." : "…";
+      if (result.source === "llm" && !reply.body.textContent.trim()) {
+        reply.body.textContent = result.toolsUsed ? "끝났어요." : "…";
+        syncMiniSpeech(reply.body.textContent);
+      }
       if (result.alert) { setState("ALERT"); await sleep(700); }
       if (!result.streamed) { setState("SPEAK"); await typeOut(reply.body, result.text); }
     } catch (err) {
@@ -1038,10 +1155,18 @@
       const row = document.createElement("div"); row.className = "cc-row";
       const yes = document.createElement("button"); yes.className = "ghost-btn primary"; yes.textContent = "실행";
       const no = document.createElement("button"); no.className = "ghost-btn"; no.textContent = "취소";
-      const done = (v) => { yes.disabled = no.disabled = true; card.classList.add(v ? "ok" : "no"); t.textContent = what + (v ? " · 승인" : " · 취소"); resolve(v); };
+      const inMini = document.body.classList.contains("mini");
+      const done = (v) => {
+        yes.disabled = no.disabled = true;
+        card.classList.add(v ? "ok" : "no");
+        t.textContent = what + (v ? " · 승인" : " · 취소");
+        if (card.parentElement !== logEl) { logEl.append(card); logEl.scrollTop = logEl.scrollHeight; }
+        resolve(v);
+      };
       yes.onclick = () => done(true); no.onclick = () => done(false);
       row.append(no, yes); card.append(t, b, row);
-      logEl.append(card); logEl.scrollTop = logEl.scrollHeight;
+      if (inMini && $("miniConfirm")) { $("miniConfirm").append(card); }
+      else { logEl.append(card); logEl.scrollTop = logEl.scrollHeight; }
       setState("LISTEN");
       yes.focus();
     });
@@ -1049,6 +1174,7 @@
 
   function clearLog() {
     logEl.innerHTML = "";
+    syncMiniSpeech("");
     Link.clear();
     State.turns = 0;
     $("turnCount").textContent = "00";
@@ -1058,6 +1184,7 @@
   const sheet = $("sheet");
   let draftMode = "AUTO";
   let draftTools = true;
+  let draftShell = "classic";
   function fillModels(list) {
     const sel = $("cfgModel");
     const names = Array.from(new Set([...(list || []), Config.model]));
@@ -1070,7 +1197,9 @@
     fillModels(Link.models);
     draftMode = Config.mode;
     draftTools = Config.tools;
+    draftShell = Config.shell || "classic";
     document.querySelectorAll("#cfgMode button").forEach((b) => b.classList.toggle("on", b.dataset.mode === draftMode));
+    document.querySelectorAll("#cfgShell button").forEach((b) => b.classList.toggle("on", b.dataset.shell === draftShell));
     document.querySelectorAll("#cfgTools button").forEach((b) => b.classList.toggle("on", (b.dataset.tools === "on") === draftTools));
     setTestStatus("", "");
     sheet.classList.add("open");
@@ -1105,6 +1234,10 @@
     draftMode = b.dataset.mode;
     document.querySelectorAll("#cfgMode button").forEach((x) => x.classList.toggle("on", x === b));
   }));
+  document.querySelectorAll("#cfgShell button").forEach((b) => b.addEventListener("click", () => {
+    draftShell = b.dataset.shell;
+    document.querySelectorAll("#cfgShell button").forEach((x) => x.classList.toggle("on", x === b));
+  }));
   document.querySelectorAll("#cfgTools button").forEach((b) => b.addEventListener("click", () => {
     draftTools = b.dataset.tools === "on";
     document.querySelectorAll("#cfgTools button").forEach((x) => x.classList.toggle("on", x === b));
@@ -1114,6 +1247,7 @@
     Config.model = $("cfgModel").value || Config.model;
     Config.mode = draftMode;
     Config.tools = draftTools;
+    Config.shell = draftShell;
     saveConfig();
     closeConfig();
     probeLLM();
@@ -1121,6 +1255,19 @@
   sheet.addEventListener("click", (e) => { if (e.target === sheet) closeConfig(); });
 
   /* ---- 단축키 ---- */
+  window.__setMiniMode = function (on) {
+    document.documentElement.classList.toggle("mini", !!on);
+    document.body.classList.toggle("mini", !!on);
+    if (on) {
+      const lastGhost = Array.from(logEl.querySelectorAll(".entry.ghost .entry-body")).pop();
+      syncMiniSpeech(lastGhost ? lastGhost.textContent : "");
+    }
+  };
+  function toggleMini() {
+    if (Native.available) Native.post({ cmd: "toggleMini" });
+  }
+  $("miniExpand").addEventListener("click", toggleMini);
+
   function toggleFullscreen() {
     if (Native.available) { Native.post({ cmd: "toggleFullscreen" }); return; }
     if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
@@ -1129,6 +1276,7 @@
   window.addEventListener("keydown", (e) => {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key === "Enter") { e.preventDefault(); toggleFullscreen(); }
+    else if (mod && (e.key === "g" || e.key === "G")) { e.preventDefault(); toggleMini(); }
     else if (mod && e.key === ",") { e.preventDefault(); openConfig(); }
     else if (mod && (e.key === "k" || e.key === "K")) { e.preventDefault(); clearLog(); }
     else if (e.key === "Escape" && sheet.classList.contains("open")) closeConfig();
@@ -1438,11 +1586,10 @@
     drawPulse(t);
     requestAnimationFrame(loop);
   }
-
   /* ==========================================================================
    * 5. 부팅
    * ======================================================================== */
-  if (!Native.available) loadBrowserConfig();
+  loadBrowserConfig();
   refreshLink();
   requestAnimationFrame(loop);
   Native.post({ cmd: "ready" });

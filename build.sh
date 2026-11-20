@@ -1,5 +1,5 @@
 #!/bin/zsh
-# 작은 빛.app 빌드 (Xcode 없이 Command Line Tools만으로)
+# 작은 빛.Rev.1.app 빌드 (Xcode 없이 Command Line Tools만으로)
 set -euo pipefail
 # CLT의 최신 SDK가 swiftc보다 새로우면 빌드가 깨지므로, 컴파일러와 맞는 SDK를 고른다
 for cand in MacOSX26.5.sdk MacOSX26.sdk MacOSX15.4.sdk; do
@@ -9,7 +9,7 @@ done
 echo "› SDK: ${SDKROOT:-default}"
 cd "$(dirname "$0")"
 
-APP="dist/작은 빛.app"
+APP="dist/작은 빛.Rev.1.app"
 rm -rf "$APP" .build-tmp
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/web" .build-tmp
 
@@ -35,14 +35,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>ko</string>
-  <key>CFBundleName</key><string>작은 빛</string>
-  <key>CFBundleDisplayName</key><string>작은 빛</string>
-  <key>CFBundleIdentifier</key><string>com.local.ghostcore</string>
+  <key>CFBundleName</key><string>작은 빛.Rev.1</string>
+  <key>CFBundleDisplayName</key><string>작은 빛.Rev.1</string>
+  <key>CFBundleIdentifier</key><string>com.local.ghostcore.rev1</string>
   <key>CFBundleExecutable</key><string>GhostCore</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>3.3</string>
-  <key>CFBundleVersion</key><string>5</string>
+  <key>CFBundleShortVersionString</key><string>3.4</string>
+  <key>CFBundleVersion</key><string>6</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSAppleEventsUsageDescription</key><string>고스트가 볼륨, 다크 모드, 메모, 미리 알림을 제어하려면 권한이 필요해요.</string>
