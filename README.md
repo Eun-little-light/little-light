@@ -65,6 +65,7 @@ mac/main.swift     WKWebView 래퍼, Ollama HTTP/자동 실행, Mac 제어 도�
 mac/make_icon.swift 앱 아이콘 생성
 build.sh           .app 번들 빌드 + 애드혹 서명
 NOTICE.md          외부 프로젝트·참고 자료·상표 표기
+CHANGELOG.md       버전별 변경과 수정 기록
 ```
 
 ## 사용한 외부 프로젝트
