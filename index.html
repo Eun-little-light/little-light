@@ -170,7 +170,6 @@
       grid-column: 2; grid-row: 3;
       padding: 0 32px 26px;
     }
-    #voice { width: 100%; height: 34px; display: block; margin-bottom: 10px; }
     .cmd-line {
       display: flex; align-items: center; gap: 14px;
       border-bottom: 1px solid var(--line-2);
@@ -302,7 +301,6 @@
     </aside>
 
     <footer class="command">
-      <canvas id="voice"></canvas>
       <form class="cmd-line" id="cmdForm" autocomplete="off">
         <span class="caret">›</span>
         <input id="cmdInput" type="text" placeholder="말을 걸어 보세요" spellcheck="false" />
@@ -1116,7 +1114,6 @@
    * ======================================================================== */
   const core = $("core"), cx2 = core.getContext("2d");
   const pulse = $("pulse"), px2 = pulse.getContext("2d");
-  const voice = $("voice"), vx2 = voice.getContext("2d");
 
   function fit(c) {
     const dpr = window.devicePixelRatio || 1;
@@ -1206,16 +1203,6 @@
     c.closePath();
   }
 
-  function drawOrbit(c, cx, cy, rx, ry, rot, from, to, alpha, width, glow) {
-    c.save();
-    c.translate(cx, cy); c.rotate(rot);
-    c.beginPath(); c.ellipse(0, 0, rx, ry, 0, from, to);
-    c.strokeStyle = rgba(accent, alpha); c.lineWidth = width;
-    if (glow) { c.shadowColor = rgba(accent, 0.9); c.shadowBlur = 12; }
-    c.stroke();
-    c.restore();
-  }
-
   function drawBokeh(c, w, h, t, front) {
     for (const b of bokeh) {
       if (b.front !== front) continue;
@@ -1229,6 +1216,15 @@
     }
   }
 
+  // ── 눈빛: 그래프 대신 눈의 밝기와 빛줄기로 수신·송신을 표현 ──
+  function eyeGlow(t) {
+    const m = State.mode, e = State.energy;
+    if (m === "SPEAK")  return 0.95 + e * 0.75 + Math.sin(t * 23) * 0.1 * e;   // 말할 때: 글자마다 번쩍
+    if (m === "LISTEN") return 0.8 + Math.sin(t * 2.6) * 0.22;                 // 들을 때: 천천히 숨 쉬듯
+    if (m === "THINK")  return 0.7 + Math.sin(t * 1.3) * 0.18;
+    if (m === "ALERT")  return 0.9 + Math.sin(t * 9) * 0.3;
+    return 0.6 + Math.sin(t * 1.2) * 0.08;
+  }
   function drawCore(t, dt) {
     const { w, h, dpr } = fit(core);
     const c = cx2;
@@ -1254,12 +1250,6 @@
     halo.addColorStop(1, rgba(accent, 0));
     c.fillStyle = halo; c.fillRect(0, 0, w, h);
     drawBokeh(c, w, h, t, false);
-
-    // 궤도 (뒤쪽 절반)
-    const oRx = R * 1.3, oRy = R * 0.34;
-    const o1 = -0.32 + Math.sin(t * 0.25) * 0.04, o2 = 0.22 + Math.cos(t * 0.21) * 0.04;
-    drawOrbit(c, cx, cy, oRx, oRy, o1, Math.PI, Math.PI * 2, 0.22, 1.2, false);
-    drawOrbit(c, cx, cy, oRx * 0.94, oRy * 1.15, o2, Math.PI, Math.PI * 2, 0.16, 1, false);
 
     // 렌즈 어셈블리 (시선 추적)
     const at = (d) => [cx + State.lookX * R * d, cy + State.lookY * R * d];
@@ -1324,6 +1314,11 @@
 
     c.save(); c.translate(ex, ey); c.scale(turnX, turnY); c.translate(-ex, -ey);
     // 스플릿 다이아몬드 (둥근 모서리 + 내부 홀로그램 결)
+    const glow = eyeGlow(t);
+    const gk = Math.min(1.35, 0.7 + glow * 0.35);
+    // 다이아몬드를 가로지르는 빛줄기: 말할 때 빠르게, 들을 때 느리게
+    const sweepSpeed = m === "SPEAK" ? 1.3 : m === "LISTEN" ? 0.45 : m === "THINK" ? 0.3 : 0.12;
+    const sweep = (t * sweepSpeed) % 1.6;          // 0~1 구간에서만 보임, 나머지는 쉬는 시간
     const pulseK = m === "SPEAK" ? 1 + Math.sin(t * 16) * 0.05 + State.energy * 0.04
                  : m === "THINK" ? 1 + Math.sin(t * 8) * 0.03 : 1 + Math.sin(t * 2.4) * 0.015;
     const dH = R * 0.47 * pulseK, dW = R * 0.4 * pulseK, gap = R * 0.035, inr = 0.4;
@@ -1339,10 +1334,10 @@
       c.save();
       roundedPoly(c, pts, radii);
       const fg = c.createLinearGradient(ex, ey - dH, ex + s * dW, ey + dH);
-      fg.addColorStop(0, rgba(accent, 0.55));
-      fg.addColorStop(0.5, rgba(accent, 0.28));
-      fg.addColorStop(1, rgba(accent, 0.5));
-      c.shadowColor = rgba(accent, 1); c.shadowBlur = m === "SPEAK" ? 34 : 24;
+      fg.addColorStop(0, rgba(accent, Math.min(0.85, 0.55 * gk)));
+      fg.addColorStop(0.5, rgba(accent, Math.min(0.6, 0.28 * gk)));
+      fg.addColorStop(1, rgba(accent, Math.min(0.8, 0.5 * gk)));
+      c.shadowColor = rgba(accent, 1); c.shadowBlur = 14 + glow * 22;
       c.fillStyle = fg; c.fill();
       c.shadowBlur = 0;
       c.clip();
@@ -1350,6 +1345,15 @@
       const hl = c.createLinearGradient(ex, ey - dH, ex, ey);
       hl.addColorStop(0, "rgba(255,255,255,0.28)"); hl.addColorStop(1, "rgba(255,255,255,0)");
       c.fillStyle = hl; c.fillRect(ex - dW, ey - dH, dW * 2, dH * 0.8);
+      if (sweep < 1) {
+        const sxp = ex - dW * 1.4 + sweep * dW * 2.8;
+        const band = c.createLinearGradient(sxp - dW * 0.35, ey - dH, sxp + dW * 0.35, ey + dH);
+        const sa = (m === "SPEAK" ? 0.5 + State.energy * 0.35 : m === "LISTEN" ? 0.35 : 0.18) * Math.sin(sweep * Math.PI);
+        band.addColorStop(0, "rgba(255,255,255,0)"); band.addColorStop(0.5, `rgba(235,250,255,${sa})`); band.addColorStop(1, "rgba(255,255,255,0)");
+        c.globalCompositeOperation = "lighter";
+        c.fillStyle = band; c.fillRect(ex - dW * 1.5, ey - dH, dW * 3, dH * 2);
+        c.globalCompositeOperation = "source-over";
+      }
       c.restore();
       // 테두리
       roundedPoly(c, pts, radii);
@@ -1363,26 +1367,15 @@
     c.restore();
 
     // 중심 다이아몬드 광점
-    const cs = R * (0.045 + State.energy * 0.012) * (m === "SPEAK" ? 1 + Math.sin(t * 20) * 0.15 : 1);
-    const cg = c.createRadialGradient(px, py, 0, px, py, cs * 5);
-    cg.addColorStop(0, rgba(accent, 0.8)); cg.addColorStop(1, rgba(accent, 0));
-    c.fillStyle = cg; c.beginPath(); c.arc(px, py, cs * 5, 0, Math.PI * 2); c.fill();
+    const cs = R * 0.045 * (0.85 + glow * 0.3);
+    const haloR = cs * (3.5 + glow * 2.5);
+    const cg = c.createRadialGradient(px, py, 0, px, py, haloR);
+    cg.addColorStop(0, rgba(accent, Math.min(1, 0.55 + glow * 0.3))); cg.addColorStop(1, rgba(accent, 0));
+    c.fillStyle = cg; c.beginPath(); c.arc(px, py, haloR, 0, Math.PI * 2); c.fill();
     c.save(); c.translate(px, py); c.rotate(Math.PI / 4);
-    c.shadowColor = "#fff"; c.shadowBlur = 16;
+    c.shadowColor = "#fff"; c.shadowBlur = 10 + glow * 14;
     c.fillStyle = "#ffffff"; c.fillRect(-cs / 2, -cs / 2, cs, cs);
     c.restore();
-
-    // 궤도 (앞쪽 절반) + 궤도 위 광점
-    drawOrbit(c, cx, cy, oRx, oRy, o1, 0, Math.PI, 0.75, 1.6, true);
-    drawOrbit(c, cx, cy, oRx * 0.94, oRy * 1.15, o2, 0, Math.PI, 0.5, 1.2, true);
-    const sa = (t * 0.6 * fast) % (Math.PI * 2);
-    if (sa < Math.PI) {
-      const px = Math.cos(sa) * oRx, py = Math.sin(sa) * oRy;
-      const sx = cx + px * Math.cos(o1) - py * Math.sin(o1), sy = cy + px * Math.sin(o1) + py * Math.cos(o1);
-      const sg = c.createRadialGradient(sx, sy, 0, sx, sy, 10);
-      sg.addColorStop(0, "rgba(255,255,255,0.95)"); sg.addColorStop(0.3, rgba(accent, 0.8)); sg.addColorStop(1, rgba(accent, 0));
-      c.fillStyle = sg; c.beginPath(); c.arc(sx, sy, 10, 0, Math.PI * 2); c.fill();
-    }
 
     drawBokeh(c, w, h, t, true);
   }
@@ -1406,29 +1399,12 @@
     px2.fillRect(0, h / 2, w, 1);
   }
 
-  function drawVoice(t) {
-    const { w, h, dpr } = fit(voice);
-    vx2.setTransform(dpr, 0, 0, dpr, 0, 0);
-    vx2.clearRect(0, 0, w, h);
-    const n = 96, step = w / n;
-    const live = State.mode === "SPEAK" ? 0.35 + State.energy * 0.65 : State.mode === "LISTEN" ? 0.25 : 0;
-    for (let i = 0; i < n; i++) {
-      const k = Math.abs(i - n / 2) / (n / 2);
-      const env = Math.pow(1 - k, 1.6);
-      const v = live * env * Math.abs(Math.sin(t * 13 + i * 0.5) * Math.cos(t * 7.3 - i * 0.23));
-      const bh = Math.max(1, v * h);
-      vx2.fillStyle = live ? rgba(accent, 0.25 + env * 0.6) : rgba(INK, 0.12);
-      vx2.fillRect(i * step, (h - bh) / 2, Math.max(1, step * 0.35), bh);
-    }
-  }
-
   function loop(now) {
     const t = now / 1000;
     const dt = Math.min(0.05, last ? t - last : 0);
     last = t;
     drawCore(t, dt);
     drawPulse(t);
-    drawVoice(t);
     requestAnimationFrame(loop);
   }
 
