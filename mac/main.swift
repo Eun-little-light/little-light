@@ -50,6 +50,14 @@ enum MacTools {
         case "set_dark_mode":  return await setDarkMode(bool(a["enabled"]))
         case "create_note":    return await createNote(str(a["title"]), str(a["body"]))
         case "add_reminder":   return await addReminder(str(a["title"]), str(a["due"]))
+        // agent-desktop(vercel-labs) 기반 범용 앱 조작: 접근성 트리를 읽고 ref로 조작 (헤드리스, 포인터 이동 없음)
+        case "desktop_look":   return Desktop.look(str(a["app"]))
+        case "desktop_click":  return Desktop.act(["click", str(a["ref"])])
+        case "desktop_type":   return Desktop.act(["type", str(a["ref"]), "--stdin"], stdin: str(a["text"]))
+        case "desktop_press":
+            var args = ["press", str(a["keys"])]
+            if !str(a["app"]).isEmpty { args += ["--app", str(a["app"])] }
+            return Desktop.act(args)
         default:               return "알 수 없는 도구: \(name)"
         }
     }
@@ -206,6 +214,72 @@ enum MacTools {
 
     static func esc(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+    }
+}
+
+// MARK: - agent-desktop 연동
+
+enum Desktop {
+    static let bin = ["/opt/homebrew/bin/agent-desktop", "/usr/local/bin/agent-desktop"]
+        .first { FileManager.default.isExecutableFile(atPath: $0) }
+
+    /// agent-desktop을 실행하고 JSON 응답을 돌려준다. 허용된 명령만 실행.
+    static func run(_ args: [String], stdin: String? = nil) -> [String: Any]? {
+        guard let bin = bin, let cmd = args.first, ["snapshot", "click", "type", "press"].contains(cmd) else { return nil }
+        let p = Process(); let out = Pipe()
+        p.executableURL = URL(fileURLWithPath: bin)
+        p.arguments = args
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        if let stdin = stdin {
+            let inp = Pipe(); p.standardInput = inp
+            try? p.run()
+            inp.fileHandleForWriting.write(Data(stdin.utf8)); try? inp.fileHandleForWriting.close()
+        } else { try? p.run() }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    static func errorText(_ j: [String: Any]?) -> String {
+        guard bin != nil else { return "agent-desktop이 설치되어 있지 않다. (brew install agent-desktop)" }
+        guard let j = j else { return "agent-desktop 응답을 읽지 못했다." }
+        let e = j["error"] as? [String: Any] ?? [:]
+        let code = e["code"] as? String ?? "UNKNOWN"
+        if code == "PERM_DENIED" || code.contains("PERMISSION") || (e["message"] as? String ?? "").lowercased().contains("accessibility") {
+            return "접근성 권한이 없다. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 '작은 빛'을 켜야 한다."
+        }
+        return "실패(\(code)): \(e["message"] as? String ?? "")"
+    }
+
+    /// 앱 화면을 읽어 조작 가능한 요소만 짧은 목록으로 만든다 (로컬 모델이 읽기 쉽게)
+    static func look(_ app: String) -> String {
+        guard !app.isEmpty else { return "앱 이름이 비어 있다." }
+        let j = run(["snapshot", "--app", app, "-i", "--compact", "--timeout-ms", "5000"])
+        guard let j = j, (j["ok"] as? Bool) == true, let data = j["data"] as? [String: Any] else { return errorText(j) }
+        var lines: [String] = []
+        func walk(_ n: [String: Any]) {
+            if let ref = n["ref_id"] as? String {
+                let role = n["role"] as? String ?? ""
+                var name = (n["name"] as? String) ?? (n["value"] as? String) ?? ""
+                if name.count > 40 { name = String(name.prefix(40)) + "…" }
+                lines.append("\(ref) \(role) \(name.isEmpty ? "(이름 없음)" : name)")
+            }
+            for c in (n["children"] as? [[String: Any]] ?? []) { walk(c) }
+        }
+        if let tree = data["tree"] as? [String: Any] { walk(tree) }
+        let total = lines.count
+        let shown = lines.prefix(70).joined(separator: "\n")
+        return "\(app) 화면의 조작 가능한 요소 \(total)개" + (total > 70 ? " (앞 70개만 표시)" : "") + ":\n" + shown
+    }
+
+    /// 클릭·입력·키 실행 결과 요약
+    static func act(_ args: [String], stdin: String? = nil) -> String {
+        let j = run(args, stdin: stdin)
+        guard let j = j, (j["ok"] as? Bool) == true else { return errorText(j) }
+        let d = (j["data"] as? [String: Any])?["disposition"] as? [String: Any]
+        let delivery = d?["delivery"] as? String ?? "delivered"
+        return "\(args[0]) 완료 (\(delivery)). 결과를 확인하려면 desktop_look으로 다시 본다."
     }
 }
 

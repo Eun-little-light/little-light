@@ -575,6 +575,7 @@
     "게임이나 영화 등 기존 작품의 대사를 그대로 인용하지 말고, 항상 네 말로 새로 말한다.",
     "마크다운 서식(제목, 굵게, 표)은 쓰지 말고 평문으로 말한다. 목록이 꼭 필요하면 줄바꿈과 '-'만 쓴다.",
     "Mac 제어 도구가 주어지면: 수호자가 무언가 해 달라고 할 때 알맞은 도구를 호출한다. 고스트가 문을 따고 신호를 잡던 것처럼 짧게 나서서 처리하고, 끝나면 결과를 한두 마디로 보고한다(예: 열었다, 맞췄다, 실패했다). 결과는 도구가 돌려준 내용만 근거로 말한다. 도구가 실패하거나 거절되면 솔직히 말한다. 도구로 할 수 없는 일은 못 한다고 말하고, 했다고 지어내지 않는다.",
+    "다른 앱 안의 버튼을 누르거나 글을 넣어야 하면: 먼저 desktop_look으로 그 앱 화면을 읽고, 목록에 있는 ref만 골라 desktop_click/desktop_type을 쓴 뒤, 필요하면 다시 desktop_look으로 결과를 확인한다. ref를 지어내지 않는다. 앱을 여는 것만이면 open_app을 쓴다. 메시지 전송·삭제·결제처럼 되돌리기 어려운 버튼은 수호자가 분명히 원할 때만 누른다.",
     "사용자 메시지 끝의 '(지금: ...)'은 현재 시각 정보다. 날짜와 시간 계산에 쓰되 굳이 언급하지는 않는다."
   ].join("\n");
 
@@ -631,11 +632,22 @@
     fn("add_reminder", "미리 알림 앱에 할 일을 추가한다. 시각이 있으면 알림도 건다.",
       { title: { type: "string" },
         due: { type: "string", description: "알림 시각 'YYYY-MM-DD HH:MM' (24시간제, 선택)" } }, ["title"]),
+    fn("desktop_look", "다른 앱의 현재 화면(접근성 트리)을 읽어, 누를 수 있는 버튼·입력칸 목록과 각 ref를 받는다. 다른 앱을 조작하기 전에 반드시 먼저 호출한다.",
+      { app: { type: "string", description: "앱 이름(예: Music, Notes, Finder, Safari)" } }, ["app"]),
+    fn("desktop_click", "desktop_look에서 받은 ref의 요소를 누른다. ref는 목록에 있는 그대로(@...:eN) 써야 한다.",
+      { ref: { type: "string", description: "desktop_look 결과의 ref" }, label: { type: "string", description: "누를 요소 설명(예: 다음 곡 버튼)" } }, ["ref", "label"]),
+    fn("desktop_type", "desktop_look에서 받은 ref의 입력칸에 글을 입력한다.",
+      { ref: { type: "string" }, text: { type: "string", description: "입력할 글" }, label: { type: "string", description: "입력칸 설명" } }, ["ref", "text", "label"]),
+    fn("desktop_press", "키 조합을 보낸다(예: return, escape, cmd+n, space). app을 주면 그 앱에 보낸다.",
+      { keys: { type: "string" }, app: { type: "string", description: "대상 앱 이름(선택)" } }, ["keys"]),
     fn("set_timer", "고스트 앱 안에서 타이머를 건다. 시간이 되면 소리와 함께 알려 준다.",
       { minutes: { type: "number", description: "분 단위(소수 가능)" },
         label: { type: "string", description: "타이머 이름(선택)" } }, ["minutes"])
   ];
-  const CONFIRM_TOOLS = { create_note: "메모 만들기", add_reminder: "미리 알림 추가" };
+  const CONFIRM_TOOLS = {
+    create_note: "메모 만들기", add_reminder: "미리 알림 추가",
+    desktop_click: "다른 앱에서 클릭", desktop_type: "다른 앱에 입력", desktop_press: "다른 앱에 키 입력"
+  };
 
   function nowStr() {
     const d = new Date();
@@ -991,7 +1003,8 @@
   const TOOL_LABEL = {
     open_app: "앱 열기", open_url: "링크 열기", web_search: "웹 검색", system_info: "시스템 조회",
     set_volume: "볼륨", set_brightness: "밝기", set_dark_mode: "다크 모드",
-    create_note: "메모", add_reminder: "미리 알림", set_timer: "타이머"
+    create_note: "메모", add_reminder: "미리 알림", set_timer: "타이머",
+    desktop_look: "화면 읽기", desktop_click: "클릭", desktop_type: "입력", desktop_press: "키"
   };
   function toolArgs(name, a) {
     if (name === "open_app") return a.name || "";
@@ -1001,6 +1014,9 @@
     if (name === "set_dark_mode") return a.enabled ? "켜기" : "끄기";
     if (name === "create_note" || name === "add_reminder") return `"${a.title || ""}"` + (a.due ? " · " + a.due : "");
     if (name === "set_timer") return `${a.minutes}분` + (a.label ? " · " + a.label : "");
+    if (name === "desktop_look") return a.app || "";
+    if (name === "desktop_click" || name === "desktop_type") return (a.label || a.ref || "") + (a.text ? ` "${a.text}"` : "");
+    if (name === "desktop_press") return (a.keys || "") + (a.app ? " → " + a.app : "");
     return "";
   }
   function toolLine(text, kind) {
@@ -1016,7 +1032,9 @@
       card.className = "confirm-card";
       const t = document.createElement("div"); t.className = "cc-title"; t.textContent = what + " 할까요?";
       const b = document.createElement("div"); b.className = "cc-body";
-      b.textContent = [args.title, args.body, args.due && "알림: " + args.due].filter(Boolean).join("\n");
+      b.textContent = [args.title, args.body, args.due && "알림: " + args.due,
+        args.label && "대상: " + args.label, args.text && "입력: " + args.text,
+        args.keys && "키: " + args.keys + (args.app ? " → " + args.app : "")].filter(Boolean).join("\n");
       const row = document.createElement("div"); row.className = "cc-row";
       const yes = document.createElement("button"); yes.className = "ghost-btn primary"; yes.textContent = "실행";
       const no = document.createElement("button"); no.className = "ghost-btn"; no.textContent = "취소";
